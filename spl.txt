@@ -1,0 +1,167 @@
+import numpy as np
+import csv
+from copy import deepcopy
+from LU import lu
+
+def spline(trasa):
+    xn = []
+    yn = []
+
+    for row in trasa[1:]:
+        xn.append(row[0])
+        yn.append(row[1])
+
+    h = xn[1] - xn[0]#zalozenie: x[i+1] - x[i] = h
+    n = len(xn) - 1 #liczba podprzedzialow
+    eq = 4*n #liczba rownan
+
+
+    buff =[0] * eq
+    rownanie =[0] * eq
+
+    A = []
+    x = [0] * eq
+    b = [0] * eq
+
+
+    #1
+    #Sj(xj) =f(xj),j=0,1,...,n−1
+    #aj =yj
+    for j in range (n):# dobrze
+        rownanie = [0] * eq
+        rownanie[j*4] = 1
+        b[j] = yn[j]
+        A.append(rownanie)
+    #2
+    #Sj(xj + 1) = f(xj + 1), j = 0, 1, ..., n−1
+    #aj + bj*h +cj*h^2 +dj*h^3 = y[j+1]
+    for j in range (n):#dobrze
+        rownanie = [0] * eq
+        rownanie[j*4] = 1#aj
+        rownanie[(j*4)+1] = h#bj*h
+        rownanie[(j*4)+2] = h*h#cj*h^2
+        rownanie[(j*4)+3] = h*h*h #dj*h^3
+        b[j+n] = yn[j+1]
+        A.append(rownanie)
+
+    #3
+    #xj:S′j−1(xj) =S′j(xj),j=1,...,n−1 wewnetrzne wezly
+    #bj+1   =bj+ 2* cj *h +3*h^2*dj
+    #0=bj+ 2* cj *h +3*h^2*dj -bj+1
+    for j in range(0,n-1):
+        rownanie = [0] * eq
+        rownanie[(j*4)+1] = 1#bj
+        rownanie[(j*4)+2] = 2*h#cj
+        rownanie[(j*4)+3] = 3*h*h#dj
+        rownanie[((j+1)*4)+1] = -1#bj+1
+        A.append(rownanie)
+
+    # 4
+    # Dla węzłów wewnętrznychxj:S′′j−1(xj) =S′′j(xj),j=1,...,n−1
+    # 2*cj+1=2*c0+ 6*d0*h
+    # 0=2*cj+ 6*dj*h -2cj+1
+    for j in range(0,n-1):
+        rownanie = [0] * eq
+        rownanie[(j*4)+2] = 2#cj
+        rownanie[(j*4)+3] = 6*h#cj
+        rownanie[((j+1)*4)+2] = -2#cj+1
+        A.append(rownanie)
+    # 5
+    # 2 krawedzie
+    # S′′0(x0) =0
+    # S′′n−1(xn) =0
+    # c0 =0
+    # 2cn+6dn1h=0
+    rownanie = [0] * eq
+    A.append(rownanie)
+    rownanie[2] = 2
+
+    rownanie = [0] * eq
+    rownanie[-1] = 6*h
+    rownanie[-2] = 2
+    A.append(rownanie)
+
+    return lu(A, b)
+
+
+
+def get_ncolumn(A,n):
+    outputlist = []
+    Z=deepcopy(A)
+    Z=A[n:]
+    for values in Z:
+        outputlist.append(values[n])
+    return outputlist
+
+
+def get_i(vec,value):
+    a =0
+    for k in vec:
+        if value == k:
+            return a
+        a=a+1
+
+
+def forward_substitution(L,b):
+    x = []
+    for i in range(len(b)):
+        x.append(0)
+        buf = 0
+        for j in range(i):
+            buf += L[i][j] * x[j]
+        x[i] = (b[i] - buf)/L[i][i]
+    # x=np.array(x)
+    return x
+
+
+def backward_substitution(U,b):
+    x = []
+    N=len(b)
+    for k in range(N):
+        x.append(0.0)
+    for i in range((N-1),-1,-1):
+        buf1 = 0
+        for j in range(i+1,N):
+            buf1 += U[i][j] * x[j]
+        x[i] = (b[i] - buf1)/U[i][i]
+    return x
+
+
+def create_identity_matrix(N):
+    x=[]
+    for i in range(N):
+        x.append([])
+        for j in range(N):
+            if i == j:
+                x[i].append(1.0)
+            else:
+                x[i].append(0.0)
+  #  x = np.array(x)
+    return x
+
+
+def lu_decomposition_pivot(A,b):
+    n = len(A)
+    U = deepcopy(A)
+    A = np.array(A, float)
+    b = np.array(b, float)
+    piv = np.arange(0, n)
+    L = create_identity_matrix(n)
+
+    for k in range(n - 1):
+        ind = get_i(get_ncolumn(U, k), max(get_ncolumn(U, k), key=abs))  # skracac kolumny o 1 z gory
+        ind = ind + k
+        U[k], U[ind] = U[ind], U[k]
+        piv[[k, ind]] = piv[[ind, k]]
+        for j in range(k + 1, n):
+            L[j][k] = U[j][k] / U[k][k]
+            for w in range(k, n):
+                U[j][w] = U[j][w] - (U[k][w] * L[j][k])
+
+    b = b[piv]
+    L = np.array(L, float)
+
+    y = forward_substitution(L, b)
+    x = backward_substitution(U, y)
+    print(x)
+    return x
